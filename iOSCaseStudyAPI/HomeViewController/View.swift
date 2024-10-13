@@ -8,6 +8,8 @@
 import Foundation
 import UIKit
 
+
+
 protocol ViewProtocol {
     
     var presenter: PresenterProtocol? { get set }
@@ -16,7 +18,9 @@ protocol ViewProtocol {
     
 }
 
+
 class ScreenView: UIViewController, ViewProtocol, UISearchBarDelegate {
+    
     
     enum SectionType: Int {
         case zeroToHundred = 0
@@ -39,89 +43,112 @@ class ScreenView: UIViewController, ViewProtocol, UISearchBarDelegate {
     }
     
     var presenter: PresenterProtocol?
-    var screenShots: [String] = []
     
+    var screenShots: [String] = []
+
     private let searchBar = UISearchBar()
     
+    
+    
+    
     private let collectionView: UICollectionView = {
+        
         let layout = UICollectionViewFlowLayout()
-        layout.sectionHeadersPinToVisibleBounds = true // Ensure headers stay visible
+        layout.sectionHeadersPinToVisibleBounds = false
+        layout.scrollDirection = .vertical
         let cvframe = UICollectionView(frame: .zero, collectionViewLayout: layout)
         cvframe.translatesAutoresizingMaskIntoConstraints = false
+        
         return cvframe
     }()
     
     private var noDataLabel: UILabel = {
+        
         let label = UILabel()
         label.textAlignment = .center
         label.textColor = .black
         label.isHidden = true
         label.translatesAutoresizingMaskIntoConstraints = false
+        
         return label
     }()
-    
-    var firstSection = [String]()
-    var secondSection = [String]()
-    var thirdSection = [String]()
-    var fourthSection = [String]()
-    
-    // Image download queue
-    private let imageDownloadQueue = OperationQueue()
+  
 
+
+    
+  
+    
+    private let operationQueue = OperationQueue()
+  
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
         
-        imageDownloadQueue.maxConcurrentOperationCount = 3 // Max 3 downloads at a time
+        operationQueue.maxConcurrentOperationCount = 3
         
         setupSearchBar()
         setupUI()
+        
     }
-
+    
+    
+    
+   
     func setupSearchBar() {
         searchBar.translatesAutoresizingMaskIntoConstraints = false
         searchBar.placeholder = "Search"
         searchBar.delegate = self
         view.addSubview(searchBar)
     }
-
+    
+    
     func showApi(_ screenUrl: [String]) {
         DispatchQueue.main.async {
             self.screenShots = screenUrl
-            self.categorizeURLs()
             print("Veri geldi VİEW'e: \(screenUrl)")
+
+            for url in screenUrl {
+                self.downloadImage(from: url)
+            }
+
+            self.collectionView.reloadData()
         }
     }
 
-    func categorizeURLs() {
-        firstSection.removeAll()
-        secondSection.removeAll()
-        thirdSection.removeAll()
-        fourthSection.removeAll()
-
-        for url in screenShots {
-            downloadImage(from: url)
-        }
-    }
-
-    func downloadImage(from urlString: String) {
-        guard let url = URL(string: urlString) else { return }
-
-        let downloadOperation = BlockOperation {
-            if let imageData = try? Data(contentsOf: url), let image = UIImage(data: imageData) {
-                let imageSizeKB = Double(imageData.count) / 1024.0
-                
-                DispatchQueue.main.async {
-                    self.categorizeImage(urlString: urlString, sizeKB: imageSizeKB)
-                }
+    /*  func categorizeURLs() {
+     firstSection.removeAll()
+     secondSection.removeAll()
+     thirdSection.removeAll()
+     fourthSection.removeAll()
+     
+     for url in screenShots {
+     downloadImage(from: url)
+     }
+     }*/
+    
+    
+    func failApi(with noData: String) {
+        DispatchQueue.main.async {
+            self.screenShots = []
+            self.noDataLabel.text = noData
+            self.collectionView.isHidden = true
+            self.noDataLabel.isHidden = false
+            
+            if !noData.isEmpty {
+                self.searchBar.isHidden = true
             }
         }
-        imageDownloadQueue.addOperation(downloadOperation)
     }
-
+    
+    
+    
+  
+    
+    
+    
     func categorizeImage(urlString: String, sizeKB: Double) {
         var sectionIndex: Int = 0
-        
+
         switch sizeKB {
         case 0..<100:
             firstSection.append(urlString)
@@ -136,53 +163,44 @@ class ScreenView: UIViewController, ViewProtocol, UISearchBarDelegate {
             fourthSection.append(urlString)
             sectionIndex = SectionType.fivehundredPlus.rawValue
         }
+
+        let currentItemCount = collectionView.numberOfItems(inSection: sectionIndex)
+        let indexPath = IndexPath(item: currentItemCount, section: sectionIndex)
         
-        // Reload only the newly downloaded image cell
-        let indexPath = IndexPath(item: collectionView.numberOfItems(inSection: sectionIndex), section: sectionIndex)
-        collectionView.insertItems(at: [indexPath])
-    }
-
-    func failApi(with noData: String) {
-        DispatchQueue.main.async {
-            self.screenShots = []
-            self.noDataLabel.text = noData
-            self.collectionView.isHidden = true
-            self.noDataLabel.isHidden = false
-
-            if !noData.isEmpty {
-                self.searchBar.isHidden = true
-            }
+         if currentItemCount < (sectionIndex == 0 ? firstSection.count : sectionIndex == 1 ? secondSection.count : sectionIndex == 2 ? thirdSection.count : fourthSection.count) {
+             collectionView.insertItems(at: [indexPath])
         }
     }
+
     
+    
+    
+    var firstSection = [String]()
+    var secondSection = [String]()
+    var thirdSection = [String]()
+    var fourthSection = [String]()
+    
+    var isSearching = false
+    
+
+
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
-        
         if searchText.isEmpty {
             isSearching = false
-            // Orijinal dizileri geri yükle
-            firstSection = filteredFirstSection
-            secondSection = filteredSecondSection
-            thirdSection = filteredThirdSection
-            fourthSection = filteredFourthSection
+            collectionView.reloadData()
+            
+         presenter?.interactor?.fetchApi()
         } else {
+            
             isSearching = true
             
-            // Filtreleme yap
-            filteredFirstSection = firstSection.filter { $0.contains(searchText) }
-            filteredSecondSection = secondSection.filter { $0.contains(searchText) }
-            filteredThirdSection = thirdSection.filter { $0.contains(searchText) }
-            filteredFourthSection = fourthSection.filter { $0.contains(searchText) }
-            
-            // Filtrelenmiş dizileri güncelle
-            firstSection = filteredFirstSection
-            secondSection = filteredSecondSection
-            thirdSection = filteredThirdSection
-            fourthSection = filteredFourthSection
+            firstSection = firstSection.filter { $0.contains(searchText) }
+            secondSection = secondSection.filter { $0.contains(searchText) }
+            thirdSection = thirdSection.filter { $0.contains(searchText) }
+            fourthSection = fourthSection.filter { $0.contains(searchText) }
         }
         
-        DispatchQueue.main.async {
-            self.collectionView.reloadData()
-        }
+        collectionView.reloadData()
     }
 
     
@@ -240,31 +258,35 @@ extension ScreenView: UICollectionViewDataSource, UICollectionViewDelegate, UICo
         }
     }
     
+    
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: CollectionViewCell.identifier, for: indexPath) as! CollectionViewCell
-        let urlString: String
         
-        switch indexPath.section {
-        case SectionType.zeroToHundred.rawValue:
-            urlString = firstSection[indexPath.row]
-        case SectionType.hundredToTwofifty.rawValue:
-            urlString = secondSection[indexPath.row]
-        case SectionType.twofiftyTofivehundred.rawValue:
-            urlString = thirdSection[indexPath.row]
-        case SectionType.fivehundredPlus.rawValue:
-            urlString = fourthSection[indexPath.row]
-        default:
-            return UICollectionViewCell()
+        let sectionType = SectionType(rawValue: indexPath.section)
+        switch sectionType {
+        case .zeroToHundred:
+            cell.configureCell(with: self.firstSection[indexPath.row])
+        case .hundredToTwofifty:
+            cell.configureCell(with: self.secondSection[indexPath.row])
+        case .twofiftyTofivehundred:
+            cell.configureCell(with: self.thirdSection[indexPath.row])
+        case .fivehundredPlus:
+            cell.configureCell(with: self.fourthSection[indexPath.row])
+        case .none:
+            break
         }
-        
-        cell.configureCell(with: urlString)
         return cell
     }
+    
 
-    // Section başlıklarını göstermek için
+    
+    
+    
+    // Section başlık https://stackoverflow.com/questions/30005348/how-do-i-add-a-section-title-in-uicollectionview
     func collectionView(_ collectionView: UICollectionView, viewForSupplementaryElementOfKind kind: String, at indexPath: IndexPath) -> UICollectionReusableView {
+        
         if kind == UICollectionView.elementKindSectionHeader {
-            let headerView = collectionView.dequeueReusableSupplementaryView(ofKind: kind, withReuseIdentifier: CollectionReusableView.identifier, for: indexPath) as! CollectionReusableView
+            let headerView = collectionView.dequeueReusableSupplementaryView(ofKind: kind, withReuseIdentifier: SectionHeaderView.identifier, for: indexPath) as! SectionHeaderView
             
             if let sectionType = SectionType(rawValue: indexPath.section) {
                 headerView.titleLabel.text = sectionType.title
@@ -275,13 +297,24 @@ extension ScreenView: UICollectionViewDataSource, UICollectionViewDelegate, UICo
         return UICollectionReusableView()
     }
     
+    
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, referenceSizeForHeaderInSection section: Int) -> CGSize {
-        return CGSize(width: collectionView.frame.width, height: 40)
+        return CGSize(width: collectionView.frame.width, height: 30)
     }
 
+    
+    
+    
+    
+    
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
         return CGSize(width: 110, height: 180)
     }
+    
+    
+    
+    
+    
 
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         let selectedUrl : String
@@ -305,6 +338,8 @@ extension ScreenView: UICollectionViewDataSource, UICollectionViewDelegate, UICo
         
        }
    
+    
+    
     
     
     private func setupUI() {

@@ -8,8 +8,7 @@
 import Foundation
 import UIKit
 
-// Class, protocol
-// EntryPoint
+
 
 typealias EntryPoint = ViewProtocol & UIViewController
 

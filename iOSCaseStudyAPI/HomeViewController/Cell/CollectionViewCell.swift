@@ -8,7 +8,7 @@
 import UIKit
 
 class CollectionViewCell: UICollectionViewCell {
-    static let identifier = "CustomCollectionViewCell"
+    static let identifier = "CollectionViewCell"
     
     let imageView: UIImageView = {
         let imageView = UIImageView()

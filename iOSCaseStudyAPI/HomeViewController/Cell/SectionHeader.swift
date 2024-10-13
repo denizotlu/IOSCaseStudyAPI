@@ -9,9 +9,9 @@ import Foundation
 import UIKit
 
 
-class CollectionReusableView: UICollectionReusableView {
+class SectionHeaderView: UICollectionReusableView {
     
-    static let identifier = "SectionHeader"
+    static let identifier = "sectionId"
     
     let titleLabel: UILabel = {
         let label = UILabel()
